@@ -1,10 +1,12 @@
 use Test::More qw/ no_plan /;
-use_ok('Devel::DTrace::Helper');
+use Devel::DTrace::Helper;
+use Carp qw/ cluck /;
+
 diag("$$");
 
 sub d {
-    -f '/';
     sleep 1;
+    print STDERR "foo\n";
 }
 
 sub c {

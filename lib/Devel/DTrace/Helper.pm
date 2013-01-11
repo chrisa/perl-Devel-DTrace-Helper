@@ -14,7 +14,7 @@ BEGIN {
 
 	my (undef, $path) = File::Spec->splitpath(__FILE__);
 	my $helper_path = File::Spec->catfile($path, 'perlhelper.d');
-        init_helper($helper_path);
+        Devel::DTrace::Helper::init_helper($helper_path);
 }
 
 1;

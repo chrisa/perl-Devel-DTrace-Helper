@@ -7,6 +7,9 @@
 #define _FILE_OFFSET_BITS 32
 #include <dtrace.h>
 
+/* -------------------------------------------------------------------- */
+/* DOF loading */
+
 #ifdef __APPLE__
 static const char *helper = "/dev/dtracehelper";
 
@@ -68,11 +71,176 @@ load_dof(dof_hdr_t *dof)
         return (0);
 }
 
+/* -------------------------------------------------------------------- */
+/* top-level runops hooking */
+
+
+STATIC OP *
+dtrace_call_op(char *stack)
+{
+        return CALL_FPTR(PL_op->op_ppaddr)(aTHX);
+}
+
+STATIC I32
+dopoptosub_at(pTHX_ const PERL_CONTEXT *cxstk, I32 startingblock)
+{
+    dVAR;
+    I32 i;
+
+    for (i = startingblock; i >= 0; i--) {
+	register const PERL_CONTEXT * const cx = &cxstk[i];
+	switch (CxTYPE(cx)) {
+	default:
+	    continue;
+	case CXt_EVAL:
+	case CXt_SUB:
+	case CXt_FORMAT:
+                /* fprintf(stderr, "(dopoptosub_at(): found sub at cx=%ld)\n", (long)i); */
+                return i;
+	}
+    }
+    return i;
+}
+
+STATIC char *
+append_stack(char *stack, const PERL_CONTEXT *cx)
+{
+        char *line;
+
+        if (cx != NULL) {
+
+                char * subname = "";
+                CV* cv = cx->blk_sub.cv;
+                if (cv) {
+                        //fprintf(stderr, "got CV: 0x%x\n", cv);
+                        const GV *const gv = CvGV(cv);
+                        if (gv > 0xf) { /* what? */
+                                        //fprintf(stderr, "got GV: 0x%x\n", gv);
+                                subname = GvENAME(gv);
+                        }
+                }
+                else {
+                        return NULL;
+                }
+                //fprintf(stderr, "sub: %s\n", subname);
+
+                (void) asprintf(&line, "\n                  %s::%s() called at %s line %d",
+                                CopSTASHPV(cx->blk_oldcop),
+                                subname,
+                                CopFILE(cx->blk_oldcop),
+                                CopLINE(cx->blk_oldcop));
+        }
+        else {
+                (void) asprintf(&line, "<< unknown >>");
+        }
+
+        //fprintf(stderr, "line: %s\n", line);
+
+        strcat(stack, line);
+        return line;
+}
+
+STATIC int
+dtrace_runops(pTHX)
+{
+        const OP *last_op = NULL;
+        const OP *next_op = NULL;
+        const PERL_CONTEXT *cx;
+        char *stack = malloc(32768);
+
+        while ( PL_op ) {
+                sprintf(stack, "@");
+
+                int i = 0;
+                while ((cx = caller_cx(i++, NULL)) != NULL)
+                        if (append_stack(stack, cx) == NULL)
+                                break;
+                strcat(stack, "\n                  ");
+
+                /* I32 cxix = dopoptosub_at(aTHX_ cxstack, cxstack_ix); */
+                /* const PERL_CONTEXT *cx = NULL; */
+                /* const PERL_CONTEXT *ccstack = cxstack; */
+                /* const PERL_SI *top_si = PL_curstackinfo; */
+
+                /* while (cxix < 0 && top_si->si_type != PERLSI_MAIN) { */
+                /*         top_si = top_si->si_prev; */
+                /*         ccstack = top_si->si_cxstack; */
+                /*         cxix = dopoptosub_at(aTHX_ ccstack, top_si->si_cxix); */
+                /* } */
+                /* if (cxix >= 0) */
+                /*         cx = &ccstack[cxix]; */
+
+                if ( PL_op = dtrace_call_op(stack), PL_op ) {
+                        PERL_ASYNC_CHECK(  );
+                }
+        }
+
+        free(stack);
+
+        TAINT_NOT;
+        return 0;
+}
+
+STATIC void
+toplevel_runops_hook(void)
+{
+        runops_proc_t runops = dtrace_runops;
+
+        if ( PL_runops != runops ) {
+                PL_runops = runops;
+        }
+}
+
+/* -------------------------------------------------------------------- */
+/* lowlevel runops hooking */
+
+STATIC int
+lowlevel_dtrace_runops(pTHX)
+{
+        const OP *last_op = NULL;
+        const OP *next_op = NULL;
+
+        while ( PL_op ) {
+                if ( PL_op = CALL_FPTR(PL_op->op_ppaddr)(aTHX), PL_op ) {
+                        PERL_ASYNC_CHECK(  );
+                }
+        }
+
+        TAINT_NOT;
+        return 0;
+}
+
+STATIC void
+lowlevel_runops_hook(void)
+{
+        runops_proc_t runops = lowlevel_dtrace_runops;
+
+        if ( PL_runops != runops ) {
+                PL_runops = runops;
+        }
+}
+
+/* -------------------------------------------------------------------- */
+/* XS */
+
 MODULE = Devel::DTrace::Helper               PACKAGE = Devel::DTrace::Helper
 
 PROTOTYPES: DISABLE
 
-void
+        BOOT:
+        toplevel_runops_hook();
+
+int
+lowlevel_runops_hook()
+
+        CODE:
+        lowlevel_runops_hook();
+        RETVAL = 1;
+
+        OUTPUT:
+        RETVAL
+
+int
 init_helper(char *path)
 
         INIT:
@@ -85,6 +253,8 @@ init_helper(char *path)
         char *argv[2] = { "perl", NULL };
 
         CODE:
+        (void) asprintf(&argv[1], "0x%x", (unsigned int)dtrace_call_op);
+
         if ((fp = fopen(path, "r")) == NULL)
 		Perl_croak(aTHX_ "failed to open %s", path);
 
@@ -97,8 +267,6 @@ init_helper(char *path)
 
         (void) dtrace_setopt(dtp, "linkmode", "dynamic");
         (void) dtrace_setopt(dtp, "unodefs", NULL);
-
-        (void) asprintf(&argv[1], "0x%x", (unsigned int)Perl_runops_standard);
 
         if ((helper = dtrace_program_fcompile(dtp, fp,
                                               DTRACE_C_CPP | DTRACE_C_ZDEFS,
@@ -121,4 +289,7 @@ init_helper(char *path)
         }
 
         dtrace_close(dtp);
+        RETVAL = 1;
 
+        OUTPUT:
+        RETVAL

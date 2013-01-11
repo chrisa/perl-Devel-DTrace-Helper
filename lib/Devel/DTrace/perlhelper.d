@@ -18,9 +18,6 @@
         APPEND_DGT((i), 10);             \
         APPEND_DGT((i), 1);
 
-#define at_runops_frame(addr) \
-        ((uintptr_t)addr >= $1) && ((uintptr_t)addr < $1)
-
 dtrace:helper:ustack:
 {
         this->go = 0;
@@ -32,27 +29,12 @@ dtrace:helper:ustack:
         this->go = 1;
 }
 
+#define	frame_ptr_addr ((uintptr_t)arg1 + sizeof(uintptr_t) * 2)
+
 dtrace:helper:ustack:
 /this->go == 1/
 {
-        /* output/flow control */
-        this->buf = (char *)alloca(128);
-        this->off = 0;
-
-        APPEND_CHR('@');
-
-        APPEND_CHR('p');
-        APPEND_CHR('c');
-        APPEND_CHR(':');
-        APPEND_CHR(' ');
-        APPEND_NUM((uintptr_t)arg0);
-        APPEND_CHR(' ');
-        APPEND_CHR('f');
-        APPEND_CHR('p');
-        APPEND_CHR(':');
-        APPEND_CHR(' ');
-        APPEND_NUM((uintptr_t)arg1);
-
-        APPEND_CHR('\0');
-        stringof(this->buf);
+        this->framep = *(uintptr_t *)copyin(frame_ptr_addr, sizeof(uintptr_t));
+        this->stack = copyinstr(this->framep);
+        stringof(this->stack);
 }
