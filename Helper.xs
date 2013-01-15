@@ -142,13 +142,6 @@ dtrace_caller_cx(pTHX_ char *stack)
         const PERL_CONTEXT *ccstack = cxstack;
         const PERL_SI *top_si = PL_curstackinfo;
 
-        /* we may be in a higher stacklevel, so dig down deeper */
-        while (cxix < 0 && top_si->si_type != PERLSI_MAIN) {
-                top_si = top_si->si_prev;
-                ccstack = top_si->si_cxstack;
-                cxix = dopoptosub_at(ccstack, top_si->si_cxix);
-        }
-
         for (;;) {
                 if (cxix < 0)
                         break;
