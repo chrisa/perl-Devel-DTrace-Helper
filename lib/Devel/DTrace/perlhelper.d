@@ -35,6 +35,5 @@ dtrace:helper:ustack:
 /this->go == 1/
 {
         this->framep = *(uintptr_t *)copyin(frame_ptr_addr, sizeof(uintptr_t));
-        this->stack = copyinstr(this->framep);
-        stringof(this->stack);
+        copyinstr(this->framep);
 }
