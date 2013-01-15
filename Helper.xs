@@ -75,7 +75,7 @@ load_dof(dof_hdr_t *dof)
 /* runops hooking */
 
 STATIC OP *
-dtrace_call_op(char *stack)
+dtrace_call_op(pTHX_ char *stack)
 {
         return CALL_FPTR(PL_op->op_ppaddr)(aTHX);
 }
@@ -171,7 +171,7 @@ dtrace_runops(pTHX)
                 dtrace_caller_cx(aTHX_ stack);
                 strcat(stack, "\n               ");
 
-                if ( PL_op = dtrace_call_op(stack), PL_op ) {
+                if ( PL_op = dtrace_call_op(aTHX_ stack), PL_op ) {
                         PERL_ASYNC_CHECK(  );
                 }
         }

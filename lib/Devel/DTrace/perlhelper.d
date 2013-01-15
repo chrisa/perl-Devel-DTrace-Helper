@@ -29,7 +29,7 @@ dtrace:helper:ustack:
         this->go = 1;
 }
 
-#define	frame_ptr_addr ((uintptr_t)arg1 + sizeof(uintptr_t) * 2)
+#define	frame_ptr_addr ((uintptr_t)arg1 + sizeof(uintptr_t) * 3)
 
 dtrace:helper:ustack:
 /this->go == 1/
