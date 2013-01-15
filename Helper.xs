@@ -81,23 +81,23 @@ dtrace_call_op(char *stack)
 }
 
 STATIC I32
-dopoptosub_at(pTHX_ const PERL_CONTEXT *cxstk, I32 startingblock)
+dopoptosub_at(const PERL_CONTEXT *cxstk, I32 startingblock)
 {
-    dVAR;
-    I32 i;
+        dVAR;
+        I32 i;
 
-    for (i = startingblock; i >= 0; i--) {
-	register const PERL_CONTEXT * const cx = &cxstk[i];
-	switch (CxTYPE(cx)) {
-	default:
-	    continue;
-	case CXt_EVAL:
-	case CXt_SUB:
-	case CXt_FORMAT:
-                return i;
-	}
-    }
-    return i;
+        for (i = startingblock; i >= 0; i--) {
+                const PERL_CONTEXT * const cx = &cxstk[i];
+                switch (CxTYPE(cx)) {
+                default:
+                        continue;
+                case CXt_EVAL:
+                case CXt_SUB:
+                case CXt_FORMAT:
+                        return i;
+                }
+        }
+        return i;
 }
 
 STATIC char *
@@ -135,6 +135,29 @@ append_stack(char *stack, const PERL_CONTEXT *cx)
         return line;
 }
 
+STATIC void
+dtrace_caller_cx(pTHX_ char *stack)
+{
+        I32 cxix = dopoptosub_at(cxstack, cxstack_ix);
+        const PERL_CONTEXT *ccstack = cxstack;
+        const PERL_SI *top_si = PL_curstackinfo;
+
+        /* we may be in a higher stacklevel, so dig down deeper */
+        while (cxix < 0 && top_si->si_type != PERLSI_MAIN) {
+                top_si = top_si->si_prev;
+                ccstack = top_si->si_cxstack;
+                cxix = dopoptosub_at(ccstack, top_si->si_cxix);
+        }
+
+        for (;;) {
+                if (cxix < 0)
+                        break;
+                if (append_stack(stack, &ccstack[cxix]) == NULL)
+                        break;
+                cxix = dopoptosub_at(ccstack, cxix - 1);
+        }
+}
+
 STATIC int
 dtrace_runops(pTHX)
 {
@@ -145,27 +168,8 @@ dtrace_runops(pTHX)
 
         while ( PL_op ) {
                 sprintf(stack, "@");
-
-                int i = 0;
-                while ((cx = caller_cx(i++, NULL)) != NULL)
-                        if (append_stack(stack, cx) == NULL)
-                                break;
+                dtrace_caller_cx(aTHX_ stack);
                 strcat(stack, "\n               ");
-
-                /* I32 cxix = dopoptosub_at(aTHX_ cxstack, cxstack_ix); */
-                /* const PERL_CONTEXT *cx = NULL; */
-                /* const PERL_CONTEXT *ccstack = cxstack; */
-                /* const PERL_SI *top_si = PL_curstackinfo; */
-
-                /* while (cxix < 0 && top_si->si_type != PERLSI_MAIN) { */
-                /*         top_si = top_si->si_prev; */
-                /*         ccstack = top_si->si_cxstack; */
-                /*         cxix = dopoptosub_at(aTHX_ ccstack, top_si->si_cxix); */
-                /* } */
-                /* if (cxix >= 0) */
-                /*         cx = &ccstack[cxix]; */
-
-                /* sprintf(stack, "@len: %d", strlen(stack)); */
 
                 if ( PL_op = dtrace_call_op(stack), PL_op ) {
                         PERL_ASYNC_CHECK(  );
