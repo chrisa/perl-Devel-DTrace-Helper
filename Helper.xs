@@ -75,7 +75,7 @@ load_dof(dof_hdr_t *dof)
 /* runops hooking */
 
 STATIC OP *
-dtrace_call_op(pTHX_ char *stack)
+dtrace_call_op(pTHX_ PERL_CONTEXT *stack)
 {
         return CALL_FPTR(PL_op->op_ppaddr)(aTHX);
 }
@@ -156,15 +156,9 @@ dtrace_runops(pTHX)
 {
         const OP *last_op = NULL;
         const OP *next_op = NULL;
-        const PERL_CONTEXT *cx;
-        char stack[PATH_MAX * 2];
 
         while ( PL_op ) {
-                sprintf(stack, "@");
-                dtrace_caller_cx(aTHX_ stack);
-                strcat(stack, "\n               ");
-
-                if ( PL_op = dtrace_call_op(aTHX_ stack), PL_op ) {
+                if ( PL_op = dtrace_call_op(aTHX_ cxstack), PL_op ) {
                         PERL_ASYNC_CHECK(  );
                 }
         }
@@ -202,11 +196,17 @@ init_helper(char *path)
         int err;
 	FILE *fp;
         void *dof;
-        int argc = 2;
-        char *argv[2] = { "perl", NULL };
+        int argc = 8;
+        char *argv[8] = { "perl" };
 
         CODE:
         (void) asprintf(&argv[1], "0x%x", (unsigned int)dtrace_call_op);
+        (void) asprintf(&argv[2], "0x%x", (unsigned int)load_dof);
+        (void) asprintf(&argv[3], "0x%x", sizeof(struct context));
+        (void) asprintf(&argv[4], "0x%x", offsetof(struct context, blk_oldcop));
+        (void) asprintf(&argv[5], "0x%x", offsetof(struct cop, cop_line));
+        (void) asprintf(&argv[6], "0x%x", offsetof(struct cop, cop_stashpv));
+        (void) asprintf(&argv[7], "0x%x", offsetof(struct cop, cop_file));
 
         if ((fp = fopen(path, "r")) == NULL)
 		Perl_croak(aTHX_ "failed to open %s", path);
