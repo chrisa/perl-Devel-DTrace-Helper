@@ -9,6 +9,7 @@ code explores some alternatives.
 
 Here's an example of the output:
 
+```
   0     20                      write:entry 
               libc.so.1`__write+0x15
               libperl.so`PerlIOUnix_write+0x46
@@ -32,6 +33,7 @@ Here's an example of the output:
               libperl.so`perl_run+0x380
               perl`main+0x15b
               perl`_start+0x83
+```
 
 
 Status
