@@ -54,4 +54,8 @@ Please see:
 
   https://github.com/chrisa/perl-Devel-DTrace-Helper
 
+Copyright (C) 2013, Chris Andrews <chris@nodnol.org>
 
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.8 or,
+at your option, any later version of Perl 5 you may have available.
