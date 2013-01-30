@@ -125,17 +125,6 @@ dtrace:helper:ustack:
         this->cxsize = $3;
 
         APPEND_CHR('@');
-        APPEND_CHR('P');
-        APPEND_CHR('e');
-        APPEND_CHR('r');
-        APPEND_CHR('l');
-        APPEND_CHR(' ');
-        APPEND_CHR('s');
-        APPEND_CHR('t');
-        APPEND_CHR('a');
-        APPEND_CHR('c');
-        APPEND_CHR('k');
-        APPEND_CHR(':');
         APPEND_CHR('\n');
 }
 
